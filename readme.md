@@ -13,3 +13,5 @@ For example:
 ```
 java org.apache.sling.feature.applicationbuilder.impl.Main -d <directory with feature files> -u ~/.m2/repository -o generated-app.json
 ```
+
+For further documentation see: https://github.com/apache/sling-org-apache-sling-feature/blob/master/readme.md
