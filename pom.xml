@@ -34,9 +34,9 @@
     </properties>
 
     <scm>
-        <connection>scm:svn:http://svn.apache.org/repos/asf/sling/trunk/tooling/support/feature-applicationbuilder</connection>
-        <developerConnection>scm:svn:https://svn.apache.org/repos/asf/sling/trunk/tooling/support/feature-applicationbuilder</developerConnection>
-        <url>http://svn.apache.org/viewvc/sling/trunk/tooling/support/feature-applicationbuilder</url>
+        <connection>scm:git:https://gitbox.apache.org/repos/asf/sling-org-apache-sling-feature-applicationbuilder.git</connection>
+        <developerConnection>scm:git:https://gitbox.apache.org/repos/asf/sling-org-apache-sling-feature-applicationbuilder.git</developerConnection>
+        <url>https://gitbox.apache.org/repos/asf?p=sling-org-apache-sling-feature-applicationbuilder.git</url>
     </scm>
 
     <build>
