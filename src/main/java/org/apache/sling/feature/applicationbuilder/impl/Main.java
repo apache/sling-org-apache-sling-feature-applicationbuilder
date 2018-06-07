@@ -54,6 +54,8 @@ public class Main {
 
     private static String propsFile;
 
+    private static Boolean useResolver = false;
+
     /**
      * Parse the command line parameters and update a configuration object.
      * @param args Command line parameters
@@ -66,7 +68,8 @@ public class Main {
         final Option filesOption =  new Option("f", true, "Set feature files (comma separated)");
         final Option dirsOption = new Option("d", true, "Set feature file dirs (comma separated)");
         final Option propsOption =  new Option("p", true, "sling.properties file");
-
+        final Option useResolverOption = new Option("r", false, "If enabled uses the resolver");
+        useResolverOption.setArgs(0); // is this needed?
 
         final Option outputOption = Option.builder("o").hasArg().argName("Set output file")
                 .desc("output file").build();
@@ -77,6 +80,7 @@ public class Main {
         options.addOption(dirsOption);
         options.addOption(outputOption);
         options.addOption(propsOption);
+        options.addOption(useResolverOption);
 
         final CommandLineParser parser = new DefaultParser();
         try {
@@ -96,6 +100,9 @@ public class Main {
             }
             if ( cl.hasOption(propsOption.getOpt()) ) {
                 propsFile = cl.getOptionValue(propsOption.getOpt());
+            }
+            if ( cl.hasOption(useResolverOption.getOpt()) ) {
+                useResolver = true;
             }
         } catch ( final ParseException pe) {
             LOGGER.error("Unable to parse command line: {}", pe.getMessage(), pe);
@@ -123,7 +130,11 @@ public class Main {
     }
 
     private static FeatureResolver getFeatureResolver(ArtifactManager am) {
-        return new FrameworkResolver(am, Collections.emptyMap());
+        if (useResolver) {
+            return new FrameworkResolver(am, Collections.emptyMap());
+        } else {
+            return null;
+        }
     }
 
     public static void main(final String[] args) {

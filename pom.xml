@@ -52,11 +52,11 @@
                         <goal>unpack-dependencies</goal>
                     </goals>
                     <configuration>
-                        <excludes>META-INF/**</excludes>
+                        <excludes>META-INF/MANIFEST.MF</excludes>
                         <outputDirectory>${project.build.directory}/classes</outputDirectory>
                         <overWriteReleases>false</overWriteReleases>
                         <overWriteSnapshots>true</overWriteSnapshots>
-                        <includeArtifactIds>org.apache.felix.utils,commons-cli,org.apache.sling.feature,org.apache.sling.feature.io,org.apache.sling.commons.johnzon,slf4j-api,slf4j-simple,org.apache.felix.converter,org.osgi.service.resolver,org.apache.sling.feature.resolver</includeArtifactIds>
+                        <includeArtifactIds>org.apache.felix.framework,org.apache.felix.utils,commons-cli,org.apache.sling.feature,org.apache.sling.feature.io,org.apache.sling.feature.analyser,org.apache.sling.commons.johnzon,slf4j-api,slf4j-simple,org.apache.felix.converter,org.osgi.service.resolver,org.apache.sling.feature.resolver,osgi.core</includeArtifactIds>
                     </configuration>
                 </execution>
             </executions>
@@ -110,19 +110,19 @@
         <dependency>
             <groupId>org.apache.sling</groupId>
             <artifactId>org.apache.sling.feature</artifactId>
-            <version>0.1.1-SNAPSHOT</version>
+            <version>0.1.3-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.sling</groupId>
             <artifactId>org.apache.sling.feature.analyser</artifactId>
-            <version>0.1.0-SNAPSHOT</version>
-            <scope>test</scope>
+            <version>0.1.3-SNAPSHOT</version>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.sling</groupId>
             <artifactId>org.apache.sling.feature.io</artifactId>
-            <version>0.1.0-SNAPSHOT</version>
+            <version>0.1.3-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
