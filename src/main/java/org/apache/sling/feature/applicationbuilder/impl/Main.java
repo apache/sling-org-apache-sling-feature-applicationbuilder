@@ -56,6 +56,8 @@ public class Main {
 
     private static Boolean useResolver = false;
 
+    private static String frameworkVersion;
+
     /**
      * Parse the command line parameters and update a configuration object.
      * @param args Command line parameters
@@ -64,13 +66,11 @@ public class Main {
     private static void parseArgs(final String[] args) {
         final Option repoOption =  Option.builder("u").hasArg().argName("Set repository url")
                 .desc("repository url").build();
-
         final Option filesOption =  new Option("f", true, "Set feature files (comma separated)");
         final Option dirsOption = new Option("d", true, "Set feature file dirs (comma separated)");
         final Option propsOption =  new Option("p", true, "sling.properties file");
         final Option useResolverOption = new Option("r", false, "If enabled uses the resolver");
-        useResolverOption.setArgs(0); // is this needed?
-
+        final Option frameworkOption = new Option("fv", true, "Set felix framework version");
         final Option outputOption = Option.builder("o").hasArg().argName("Set output file")
                 .desc("output file").build();
 
@@ -81,6 +81,7 @@ public class Main {
         options.addOption(outputOption);
         options.addOption(propsOption);
         options.addOption(useResolverOption);
+        options.addOption(frameworkOption);
 
         final CommandLineParser parser = new DefaultParser();
         try {
@@ -103,6 +104,9 @@ public class Main {
             }
             if ( cl.hasOption(useResolverOption.getOpt()) ) {
                 useResolver = true;
+            }
+            if (cl.hasOption(frameworkOption.getOpt())) {
+                frameworkVersion = cl.getOptionValue(frameworkOption.getOpt());
             }
         } catch ( final ParseException pe) {
             LOGGER.error("Unable to parse command line: {}", pe.getMessage(), pe);
@@ -197,7 +201,7 @@ public class Main {
 
         }
         // felix framework hard coded for now
-        app.setFramework(IOUtils.getFelixFrameworkId(null));
+        app.setFramework(IOUtils.getFelixFrameworkId(frameworkVersion));
         return app;
     }
 

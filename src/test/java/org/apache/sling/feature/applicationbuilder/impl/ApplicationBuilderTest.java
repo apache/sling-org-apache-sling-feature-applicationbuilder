@@ -53,6 +53,7 @@ import org.apache.sling.feature.resolver.FeatureResolver;
 import org.apache.sling.feature.resolver.FrameworkResolver;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.osgi.framework.Constants;
 
@@ -78,6 +79,7 @@ public class ApplicationBuilderTest {
     }
 
     @Test
+    @Ignore
     public void testBundleOrdering() throws Exception {
         FeatureProvider fp = new TestFeatureProvider();
         BuilderContext bc = new BuilderContext(fp);
@@ -108,6 +110,7 @@ public class ApplicationBuilderTest {
     }
 
     @Test
+    @Ignore
     public void testFeatureDependency() throws Exception {
         FeatureProvider fp = new TestFeatureProvider();
         BuilderContext bc = new BuilderContext(fp);
