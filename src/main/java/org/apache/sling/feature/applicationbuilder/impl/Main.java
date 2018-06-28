@@ -24,20 +24,26 @@ import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.sling.feature.Application;
 import org.apache.sling.feature.ArtifactId;
+import org.apache.sling.feature.Feature;
+import org.apache.sling.feature.builder.ApplicationBuilder;
+import org.apache.sling.feature.builder.BuilderContext;
+import org.apache.sling.feature.builder.FeatureProvider;
+import org.apache.sling.feature.io.ArtifactHandler;
 import org.apache.sling.feature.io.ArtifactManager;
 import org.apache.sling.feature.io.ArtifactManagerConfig;
 import org.apache.sling.feature.io.IOUtils;
 import org.apache.sling.feature.io.json.ApplicationJSONWriter;
-import org.apache.sling.feature.resolver.ApplicationResolverAssembler;
-import org.apache.sling.feature.resolver.FeatureResolver;
-import org.apache.sling.feature.resolver.FrameworkResolver;
+import org.apache.sling.feature.io.json.FeatureJSONReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.stream.Stream;
 
 public class Main {
@@ -54,8 +60,6 @@ public class Main {
 
     private static String propsFile;
 
-    private static Boolean useResolver = false;
-
     private static String frameworkVersion;
 
     /**
@@ -69,7 +73,6 @@ public class Main {
         final Option filesOption =  new Option("f", true, "Set feature files (comma separated)");
         final Option dirsOption = new Option("d", true, "Set feature file dirs (comma separated)");
         final Option propsOption =  new Option("p", true, "sling.properties file");
-        final Option useResolverOption = new Option("r", false, "If enabled uses the resolver");
         final Option frameworkOption = new Option("fv", true, "Set felix framework version");
         final Option outputOption = Option.builder("o").hasArg().argName("Set output file")
                 .desc("output file").build();
@@ -80,7 +83,6 @@ public class Main {
         options.addOption(dirsOption);
         options.addOption(outputOption);
         options.addOption(propsOption);
-        options.addOption(useResolverOption);
         options.addOption(frameworkOption);
 
         final CommandLineParser parser = new DefaultParser();
@@ -101,9 +103,6 @@ public class Main {
             }
             if ( cl.hasOption(propsOption.getOpt()) ) {
                 propsFile = cl.getOptionValue(propsOption.getOpt());
-            }
-            if ( cl.hasOption(useResolverOption.getOpt()) ) {
-                useResolver = true;
             }
             if (cl.hasOption(frameworkOption.getOpt())) {
                 frameworkVersion = cl.getOptionValue(frameworkOption.getOpt());
@@ -131,14 +130,6 @@ public class Main {
         }
         // we never reach this, but have to keep the compiler happy
         return null;
-    }
-
-    private static FeatureResolver getFeatureResolver(ArtifactManager am) {
-        if (useResolver) {
-            return new FrameworkResolver(am, Collections.emptyMap());
-        } else {
-            return null;
-        }
     }
 
     public static void main(final String[] args) {
@@ -178,8 +169,9 @@ public class Main {
             System.exit(1);
         }
 
-        try (FeatureResolver fr = getFeatureResolver(am)) {
-            writeApplication(buildApplication(ApplicationResolverAssembler.assembleApplication(null, am, fr, files)), output == null ? "application.json" : output);
+        try {
+
+            writeApplication(buildApplication(assembleApplication(null, am, files)), output == null ? "application.json" : output);
 
         } catch ( final IOException ioe) {
             LOGGER.error("Unable to read feature/application files " + ioe.getMessage(), ioe);
@@ -188,6 +180,59 @@ public class Main {
             LOGGER.error("Problem generating application", e);
             System.exit(1);
         }
+    }
+
+    private static Application assembleApplication(
+        Application app,
+        final ArtifactManager artifactManager,
+        final String... featureFiles)
+        throws IOException {
+        if ( featureFiles == null || featureFiles.length == 0 ) {
+            throw new IOException("No features found.");
+        }
+
+        List<Feature> features = new ArrayList<>();
+
+        for (final String initFile : featureFiles)
+        {
+            try
+            {
+                final Feature f = IOUtils.getFeature(initFile, artifactManager, FeatureJSONReader.SubstituteVariables.RESOLVE);
+                features.add(f);
+            }
+            catch (Exception ex)
+            {
+                throw new IOException("Error reading feature: " + initFile, ex);
+            }
+        }
+
+        Collections.sort(features);
+
+        app = ApplicationBuilder.assemble(app, new BuilderContext(new FeatureProvider() {
+
+            @Override
+            public Feature provide(final ArtifactId id) {
+                try {
+                    final ArtifactHandler handler = artifactManager.getArtifactHandler("mvn:" + id.toMvnPath());
+                    try (final FileReader r = new FileReader(handler.getFile())) {
+                        final Feature f = FeatureJSONReader.read(r, handler.getUrl(), FeatureJSONReader.SubstituteVariables.RESOLVE);
+                        return f;
+                    }
+
+                } catch (final IOException e) {
+                    // ignore
+                }
+                return null;
+            }
+        }), features.toArray(new Feature[0]));
+
+        // check framework
+        if ( app.getFramework() == null ) {
+            // use hard coded Apache Felix
+            app.setFramework(IOUtils.getFelixFrameworkId(null));
+        }
+
+        return app;
     }
 
     private static Application buildApplication(final Application app) {
