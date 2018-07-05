@@ -62,12 +62,14 @@ public class Main {
 
     private static String frameworkVersion;
 
+    private static File cacheDir;
+
     /**
      * Parse the command line parameters and update a configuration object.
      * @param args Command line parameters
      * @return Configuration object.
      */
-    private static void parseArgs(final String[] args) {
+    private static void parseArgs(final String[] args) throws Exception {
         final Option repoOption =  Option.builder("u").hasArg().argName("Set repository url")
                 .desc("repository url").build();
         final Option filesOption =  new Option("f", true, "Set feature files (comma separated)");
@@ -77,6 +79,10 @@ public class Main {
         final Option outputOption = Option.builder("o").hasArg().argName("Set output file")
                 .desc("output file").build();
 
+        final Option cacheOption = new Option("c", true, "Set cache dir");
+        final Option debugOption = new Option("v", false, "Verbose");
+        debugOption.setArgs(0);
+
         final Options options = new Options();
         options.addOption(repoOption);
         options.addOption(filesOption);
@@ -84,6 +90,8 @@ public class Main {
         options.addOption(outputOption);
         options.addOption(propsOption);
         options.addOption(frameworkOption);
+        options.addOption(cacheOption);
+        options.addOption(debugOption);
 
         final CommandLineParser parser = new DefaultParser();
         try {
@@ -107,13 +115,17 @@ public class Main {
             if (cl.hasOption(frameworkOption.getOpt())) {
                 frameworkVersion = cl.getOptionValue(frameworkOption.getOpt());
             }
+            if (cl.hasOption(cacheOption.getOpt())) {
+                cacheDir = new File(cl.getOptionValue(cacheOption.getOpt()));
+            }
+            if ( cl.hasOption(debugOption.getOpt()) ) {
+                System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "debug");
+            }
         } catch ( final ParseException pe) {
-            LOGGER.error("Unable to parse command line: {}", pe.getMessage(), pe);
-            System.exit(1);
+            throw new Exception("Unable to parse command line: {}", pe);
         }
         if ( filesInput == null && dirsInput == null) {
-            LOGGER.error("Required argument missing: model files or directory");
-            System.exit(1);
+            throw new Exception("Required argument missing: model files or directory");
         }
     }
 
@@ -121,6 +133,9 @@ public class Main {
         final ArtifactManagerConfig amConfig = new ArtifactManagerConfig();
         if ( repoUrls != null ) {
             amConfig.setRepositoryUrls(repoUrls.split(","));
+        }
+        if (cacheDir != null) {
+            amConfig.setCacheDirectory(cacheDir);
         }
         try {
             return ArtifactManager.getArtifactManager(amConfig);
@@ -139,12 +154,23 @@ public class Main {
         System.setProperty("org.slf4j.simpleLogger.levelInBrackets", "true");
         System.setProperty("org.slf4j.simpleLogger.showLogName", "false");
 
+        Exception clException = null;
+        try {
+            parseArgs(args);
+        }
+        catch (Exception ex) {
+            clException = ex;
+        }
+
         LOGGER = LoggerFactory.getLogger("applicationbuilder");
 
         LOGGER.info("Apache Sling Feature Application Builder");
         LOGGER.info("");
 
-        parseArgs(args);
+        if (clException != null) {
+            LOGGER.error(clException.getMessage(), clException);
+            System.exit(1);
+        }
 
         final ArtifactManager am = getArtifactManager();
 
