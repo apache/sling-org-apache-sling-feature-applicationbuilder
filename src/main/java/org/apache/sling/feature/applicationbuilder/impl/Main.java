@@ -148,20 +148,16 @@ public class Main {
 
         final ArtifactManager am = getArtifactManager();
 
-
         final String[] files =
                 Stream.concat(
-                    Stream.of(filesInput != null ? filesInput.split(",") : new String[0])
-                        .map(path -> new File(path))
-                        .filter(File::isFile),
+                    Stream.of(filesInput != null ? filesInput.split(",") : new String[0]),
                     Stream.of(dirsInput != null ? dirsInput.split(",") : new String[0])
                         .map(path -> new File(path))
                         .filter(File::isDirectory)
                         .flatMap(dir ->
-                            Stream.of(dir.listFiles())))
-                .filter(file -> !file.getName().startsWith("."))
-                .sorted()
-                .map(File::getAbsolutePath)
+                            Stream.of(dir.listFiles()))
+                        .filter(file -> !file.getName().startsWith("."))
+                        .map(File::getAbsolutePath))
                 .toArray(String[]::new);
 
         if (files.length == 0) {
@@ -213,7 +209,7 @@ public class Main {
             @Override
             public Feature provide(final ArtifactId id) {
                 try {
-                    final ArtifactHandler handler = artifactManager.getArtifactHandler("mvn:" + id.toMvnPath());
+                    final ArtifactHandler handler = artifactManager.getArtifactHandler(id.toMvnUrl());
                     try (final FileReader r = new FileReader(handler.getFile())) {
                         final Feature f = FeatureJSONReader.read(r, handler.getUrl(), FeatureJSONReader.SubstituteVariables.RESOLVE);
                         return f;
