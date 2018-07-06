@@ -19,6 +19,7 @@ package org.apache.sling.feature.applicationbuilder.impl;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
+import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
@@ -122,6 +123,9 @@ public class Main {
                 System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "debug");
             }
         } catch ( final ParseException pe) {
+            HelpFormatter formatter = new HelpFormatter();
+            formatter.printHelp("applicationbuilder", options);
+
             throw new Exception("Unable to parse command line: {}", pe);
         }
         if ( filesInput == null && dirsInput == null) {
