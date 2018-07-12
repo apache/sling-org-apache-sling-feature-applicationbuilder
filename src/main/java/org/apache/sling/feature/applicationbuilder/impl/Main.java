@@ -27,16 +27,19 @@ import org.apache.sling.feature.Application;
 import org.apache.sling.feature.Artifact;
 import org.apache.sling.feature.ArtifactId;
 import org.apache.sling.feature.Extension;
+import org.apache.sling.feature.ExtensionType;
 import org.apache.sling.feature.Feature;
 import org.apache.sling.feature.builder.ApplicationBuilder;
 import org.apache.sling.feature.builder.BuilderContext;
 import org.apache.sling.feature.builder.FeatureProvider;
+import org.apache.sling.feature.io.ArtifactHandler;
 import org.apache.sling.feature.io.ArtifactManager;
 import org.apache.sling.feature.io.ArtifactManagerConfig;
 import org.apache.sling.feature.io.IOUtils;
 import org.apache.sling.feature.io.json.ApplicationJSONWriter;
 import org.apache.sling.feature.io.json.FeatureJSONReader;
 import org.apache.sling.feature.io.json.FeatureJSONReader.SubstituteVariables;
+import org.osgi.framework.Constants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,8 +49,14 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.jar.Attributes;
+import java.util.jar.JarFile;
 import java.util.stream.Stream;
 
 import javax.json.Json;
@@ -55,6 +64,7 @@ import javax.json.JsonArray;
 import javax.json.JsonArrayBuilder;
 import javax.json.JsonObject;
 import javax.json.JsonObjectBuilder;
+import javax.json.JsonString;
 import javax.json.JsonValue;
 
 public class Main {
@@ -227,6 +237,9 @@ public class Main {
             throw new IOException("No features found.");
         }
 
+        Map<String, String> bundleFeatureMap = new HashMap<>();
+        Map<String, Set<String>> regionPackageMap = new HashMap<>();
+        Map<String, Set<String>> featureRegionMap = new HashMap<>();
         List<Feature> features = new ArrayList<>();
 
         for (final String initFile : featureFiles)
@@ -234,7 +247,8 @@ public class Main {
             try
             {
                 final Feature f = IOUtils.getFeature(initFile, artifactManager, FeatureJSONReader.SubstituteVariables.RESOLVE);
-                addFromFeatureToBundlesAndRegions(f);
+                collectFeatureAndWhitelistMappings(f, artifactManager, bundleFeatureMap,
+                        featureRegionMap, regionPackageMap);
                 features.add(f);
             }
             catch (Exception ex)
@@ -242,21 +256,6 @@ public class Main {
                 throw new IOException("Error reading feature: " + initFile, ex);
             }
         }
-
-        /* */
-        // For each bundle in each feature mark where it came from 'from-feature'
-        // For each api-region extension in each feature mark it's 'from-feature'
-        /*
-        for (Feature f : features) {
-            System.out.println("*** feature: " + f.getId().toMvnId());
-            for (Artifact b : f.getBundles()) {
-                b.getMetadata().put("from-feature", f.getId().toMvnId());
-            }
-        }
-        */
-
-        // remove the from-feature stuff in the ApplicationBuilder.assemble()
-        /* */
 
         Collections.sort(features);
 
@@ -266,7 +265,8 @@ public class Main {
             public Feature provide(final ArtifactId id) {
                 try {
                     Feature f = IOUtils.getFeature(id.toMvnUrl(), artifactManager, SubstituteVariables.RESOLVE);
-                    addFromFeatureToBundlesAndRegions(f);
+                    collectFeatureAndWhitelistMappings(f, artifactManager, bundleFeatureMap,
+                            featureRegionMap, regionPackageMap);
                     return f;
                 } catch (final IOException e) {
                     // ignore
@@ -274,6 +274,12 @@ public class Main {
                 return null;
             }
         }), features.toArray(new Feature[0]));
+
+        Extension bundleFeatureExtension = createBundleFeatureExtension(bundleFeatureMap);
+        app.getExtensions().add(bundleFeatureExtension);
+
+        Extension featureRegionExtension = createFeatureRegionExtension(regionPackageMap, featureRegionMap);
+        app.getExtensions().add(featureRegionExtension);
 
         // check framework
         if ( app.getFramework() == null ) {
@@ -284,38 +290,104 @@ public class Main {
         return app;
     }
 
-    private static void addFromFeatureToBundlesAndRegions(Feature f) {
+    private static Extension createBundleFeatureExtension(Map<String, String> bundleFeatureMap) {
+        Extension bundleFeatureExtension = new Extension(ExtensionType.JSON, "bundle-feature-mapping", true);
+        JsonArrayBuilder ab = Json.createArrayBuilder();
+        JsonObjectBuilder ob = Json.createObjectBuilder();
+        for (Map.Entry<String, String> entry : bundleFeatureMap.entrySet()) {
+            ob.add(entry.getKey(), entry.getValue());
+        }
+        ab.add(ob);
+        bundleFeatureExtension.setJSON(ab.build().toString());
+        return bundleFeatureExtension;
+    }
+
+    private static Extension createFeatureRegionExtension(Map<String, Set<String>> regionPackageMap,
+            Map<String, Set<String>> featureRegionMap) {
+        Extension featureRegionExtension = new Extension(ExtensionType.JSON, "feature-region-mapping", true);
+        JsonArrayBuilder ab = Json.createArrayBuilder();
+
+        JsonObjectBuilder pob = Json.createObjectBuilder();
+        for (Map.Entry<String, Set<String>> entry : regionPackageMap.entrySet()) {
+            JsonArrayBuilder pab = Json.createArrayBuilder();
+            entry.getValue().stream().forEach(pab::add);
+            pob.add(entry.getKey(), pab);
+        }
+        JsonObjectBuilder ob = Json.createObjectBuilder();
+        ob.add("packages", pob);
+
+        JsonObjectBuilder fob = Json.createObjectBuilder();
+        for (Map.Entry<String, Set<String>> entry : featureRegionMap.entrySet()) {
+            JsonArrayBuilder rab = Json.createArrayBuilder();
+            entry.getValue().stream().forEach(rab::add);
+            fob.add(entry.getKey(), rab);
+        }
+        ob.add("regions", fob);
+        ab.add(ob);
+
+        featureRegionExtension.setJSON(ab.build().toString());
+        return featureRegionExtension;
+    }
+
+    private static void collectFeatureAndWhitelistMappings(Feature f,
+            ArtifactManager artifactManager,
+            Map<String, String> bundleFeatureMap,
+            Map<String, Set<String>> featureRegionMap,
+            Map<String, Set<String>> regionPackageMap)
+            throws IOException {
+        String featureID = f.getId().toMvnId();
         for (Artifact bundle : f.getBundles()) {
-            bundle.getMetadata().put("from-feature", f.getId().toMvnId());
+            ArtifactHandler handler = artifactManager.getArtifactHandler(bundle.getId().toMvnUrl());
+            String bsn = getBsn(handler.getFile());
+            bundleFeatureMap.put(bsn, featureID);
         }
 
-        for (Extension e : f.getExtensions()) {
+        for (Iterator<Extension> it = f.getExtensions().iterator(); it.hasNext(); ) {
+            Extension e = it.next();
             if ("api-regions".equals(e.getName())) {
+                it.remove(); // api-regions is not needed in the application.json
+
+                Set<String> regions = featureRegionMap.get(featureID);
+                if (regions == null) {
+                    regions = new HashSet<>();
+                    featureRegionMap.put(featureID, regions);
+                }
+
                 JsonArray ja = Json.createReader(new StringReader(e.getJSON())).readArray();
-                JsonArray newArray = addToJSONMaps(ja, "from-feature", f.getId().toMvnId());
-                e.setJSON(newArray.toString());
+                for (JsonValue jv : ja) {
+                    if (jv instanceof JsonString) {
+                        regions.add(((JsonString) jv).getString());
+                    } else if (jv instanceof JsonObject) {
+                        JsonObject jo = (JsonObject) jv;
+                        String name = jo.getString("name");
+                        regions.add(name);
+
+                        JsonArray exports = jo.getJsonArray("exports");
+                        Set<String> packages = regionPackageMap.get(name);
+                        if (packages == null) {
+                            packages = new HashSet<>();
+                            regionPackageMap.put(name, packages);
+                        }
+                        for (JsonValue p : exports) {
+                            if (p instanceof JsonString) {
+                                packages.add(((JsonString) p).getString());
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 
-    private static JsonArray addToJSONMaps(JsonArray ja, String key, String value) {
-        JsonArrayBuilder ab = Json.createArrayBuilder();
-
-        for (JsonValue jv : ja) {
-            if (jv instanceof JsonObject) {
-                JsonObject jo = (JsonObject) jv;
-                JsonObjectBuilder ob = Json.createObjectBuilder();
-                for (Map.Entry<String, JsonValue> entry : jo.entrySet()) {
-                    ob.add(entry.getKey(), entry.getValue());
-                }
-                ob.add(key, value);
-                ab.add(ob.build());
-            } else {
-                ab.add(jv);
-            }
+    private static String getBsn(File artifactFile) throws IOException {
+        try (JarFile jf = new JarFile(artifactFile)) {
+            Attributes attrs = jf.getManifest().getMainAttributes();
+            String bsn = attrs.getValue(Constants.BUNDLE_SYMBOLICNAME);
+            String version = attrs.getValue(Constants.BUNDLE_VERSION);
+            if (version == null)
+                version = "0.0.0";
+            return bsn + ":" + version;
         }
-
-        return ab.build();
     }
 
     private static Application buildApplication(final Application app) {
