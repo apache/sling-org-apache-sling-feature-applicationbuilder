@@ -24,28 +24,38 @@ import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.sling.feature.Application;
+import org.apache.sling.feature.Artifact;
 import org.apache.sling.feature.ArtifactId;
+import org.apache.sling.feature.Extension;
 import org.apache.sling.feature.Feature;
 import org.apache.sling.feature.builder.ApplicationBuilder;
 import org.apache.sling.feature.builder.BuilderContext;
 import org.apache.sling.feature.builder.FeatureProvider;
-import org.apache.sling.feature.io.ArtifactHandler;
 import org.apache.sling.feature.io.ArtifactManager;
 import org.apache.sling.feature.io.ArtifactManagerConfig;
 import org.apache.sling.feature.io.IOUtils;
 import org.apache.sling.feature.io.json.ApplicationJSONWriter;
 import org.apache.sling.feature.io.json.FeatureJSONReader;
+import org.apache.sling.feature.io.json.FeatureJSONReader.SubstituteVariables;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
+
+import javax.json.Json;
+import javax.json.JsonArray;
+import javax.json.JsonArrayBuilder;
+import javax.json.JsonObject;
+import javax.json.JsonObjectBuilder;
+import javax.json.JsonValue;
 
 public class Main {
 
@@ -224,6 +234,7 @@ public class Main {
             try
             {
                 final Feature f = IOUtils.getFeature(initFile, artifactManager, FeatureJSONReader.SubstituteVariables.RESOLVE);
+                addFromFeatureToBundlesAndRegions(f);
                 features.add(f);
             }
             catch (Exception ex)
@@ -232,6 +243,21 @@ public class Main {
             }
         }
 
+        /* */
+        // For each bundle in each feature mark where it came from 'from-feature'
+        // For each api-region extension in each feature mark it's 'from-feature'
+        /*
+        for (Feature f : features) {
+            System.out.println("*** feature: " + f.getId().toMvnId());
+            for (Artifact b : f.getBundles()) {
+                b.getMetadata().put("from-feature", f.getId().toMvnId());
+            }
+        }
+        */
+
+        // remove the from-feature stuff in the ApplicationBuilder.assemble()
+        /* */
+
         Collections.sort(features);
 
         app = ApplicationBuilder.assemble(app, new BuilderContext(new FeatureProvider() {
@@ -239,12 +265,9 @@ public class Main {
             @Override
             public Feature provide(final ArtifactId id) {
                 try {
-                    final ArtifactHandler handler = artifactManager.getArtifactHandler(id.toMvnUrl());
-                    try (final FileReader r = new FileReader(handler.getFile())) {
-                        final Feature f = FeatureJSONReader.read(r, handler.getUrl(), FeatureJSONReader.SubstituteVariables.RESOLVE);
-                        return f;
-                    }
-
+                    Feature f = IOUtils.getFeature(id.toMvnUrl(), artifactManager, SubstituteVariables.RESOLVE);
+                    addFromFeatureToBundlesAndRegions(f);
+                    return f;
                 } catch (final IOException e) {
                     // ignore
                 }
@@ -259,6 +282,40 @@ public class Main {
         }
 
         return app;
+    }
+
+    private static void addFromFeatureToBundlesAndRegions(Feature f) {
+        for (Artifact bundle : f.getBundles()) {
+            bundle.getMetadata().put("from-feature", f.getId().toMvnId());
+        }
+
+        for (Extension e : f.getExtensions()) {
+            if ("api-regions".equals(e.getName())) {
+                JsonArray ja = Json.createReader(new StringReader(e.getJSON())).readArray();
+                JsonArray newArray = addToJSONMaps(ja, "from-feature", f.getId().toMvnId());
+                e.setJSON(newArray.toString());
+            }
+        }
+    }
+
+    private static JsonArray addToJSONMaps(JsonArray ja, String key, String value) {
+        JsonArrayBuilder ab = Json.createArrayBuilder();
+
+        for (JsonValue jv : ja) {
+            if (jv instanceof JsonObject) {
+                JsonObject jo = (JsonObject) jv;
+                JsonObjectBuilder ob = Json.createObjectBuilder();
+                for (Map.Entry<String, JsonValue> entry : jo.entrySet()) {
+                    ob.add(entry.getKey(), entry.getValue());
+                }
+                ob.add(key, value);
+                ab.add(ob.build());
+            } else {
+                ab.add(jv);
+            }
+        }
+
+        return ab.build();
     }
 
     private static Application buildApplication(final Application app) {
