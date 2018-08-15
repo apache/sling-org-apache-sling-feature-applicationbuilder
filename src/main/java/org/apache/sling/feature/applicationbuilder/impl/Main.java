@@ -16,28 +16,6 @@
  */
 package org.apache.sling.feature.applicationbuilder.impl;
 
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.CommandLineParser;
-import org.apache.commons.cli.DefaultParser;
-import org.apache.commons.cli.HelpFormatter;
-import org.apache.commons.cli.Option;
-import org.apache.commons.cli.Options;
-import org.apache.commons.cli.ParseException;
-import org.apache.sling.feature.Application;
-import org.apache.sling.feature.ArtifactId;
-import org.apache.sling.feature.Feature;
-import org.apache.sling.feature.builder.ApplicationBuilder;
-import org.apache.sling.feature.builder.BuilderContext;
-import org.apache.sling.feature.builder.FeatureProvider;
-import org.apache.sling.feature.io.ArtifactHandler;
-import org.apache.sling.feature.io.ArtifactManager;
-import org.apache.sling.feature.io.ArtifactManagerConfig;
-import org.apache.sling.feature.io.IOUtils;
-import org.apache.sling.feature.io.json.ApplicationJSONWriter;
-import org.apache.sling.feature.io.json.FeatureJSONReader;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
@@ -46,6 +24,31 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Stream;
+
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.DefaultParser;
+import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.Option;
+import org.apache.commons.cli.Options;
+import org.apache.commons.cli.ParseException;
+import org.apache.sling.feature.Artifact;
+import org.apache.sling.feature.ArtifactId;
+import org.apache.sling.feature.Extension;
+import org.apache.sling.feature.ExtensionType;
+import org.apache.sling.feature.Feature;
+import org.apache.sling.feature.FeatureConstants;
+import org.apache.sling.feature.builder.BuilderContext;
+import org.apache.sling.feature.builder.FeatureBuilder;
+import org.apache.sling.feature.builder.FeatureProvider;
+import org.apache.sling.feature.io.ArtifactHandler;
+import org.apache.sling.feature.io.ArtifactManager;
+import org.apache.sling.feature.io.ArtifactManagerConfig;
+import org.apache.sling.feature.io.IOUtils;
+import org.apache.sling.feature.io.json.FeatureJSONReader;
+import org.apache.sling.feature.io.json.FeatureJSONWriter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class Main {
 
@@ -197,7 +200,7 @@ public class Main {
 
         try {
 
-            writeApplication(buildApplication(assembleApplication(null, am, files)), output == null ? "application.json" : output);
+            writeApplication(buildApplication(assembleApplication(am, files)), output == null ? "application.json" : output);
 
         } catch ( final IOException ioe) {
             LOGGER.error("Unable to read feature/application files " + ioe.getMessage(), ioe);
@@ -208,8 +211,7 @@ public class Main {
         }
     }
 
-    private static Application assembleApplication(
-        Application app,
+    private static Feature assembleApplication(
         final ArtifactManager artifactManager,
         final String... featureFiles)
         throws IOException {
@@ -223,7 +225,7 @@ public class Main {
         {
             try
             {
-                final Feature f = IOUtils.getFeature(initFile, artifactManager, FeatureJSONReader.SubstituteVariables.RESOLVE);
+                final Feature f = IOUtils.getFeature(initFile, artifactManager);
                 features.add(f);
             }
             catch (Exception ex)
@@ -234,14 +236,15 @@ public class Main {
 
         Collections.sort(features);
 
-        app = ApplicationBuilder.assemble(app, new BuilderContext(new FeatureProvider() {
+        // TODO make feature id configurable
+        final Feature app = FeatureBuilder.assemble(ArtifactId.fromMvnId("group:assembled:1.0.0"), new BuilderContext(new FeatureProvider() {
 
             @Override
             public Feature provide(final ArtifactId id) {
                 try {
                     final ArtifactHandler handler = artifactManager.getArtifactHandler(id.toMvnUrl());
                     try (final FileReader r = new FileReader(handler.getFile())) {
-                        final Feature f = FeatureJSONReader.read(r, handler.getUrl(), FeatureJSONReader.SubstituteVariables.RESOLVE);
+                        final Feature f = FeatureJSONReader.read(r, handler.getUrl());
                         return f;
                     }
 
@@ -252,35 +255,45 @@ public class Main {
             }
         }), features.toArray(new Feature[0]));
 
-        // check framework
-        if ( app.getFramework() == null ) {
-            // use hard coded Apache Felix
-            app.setFramework(IOUtils.getFelixFrameworkId(null));
-        }
 
         return app;
     }
 
-    private static Application buildApplication(final Application app) {
+    private static Feature buildApplication(final Feature app) {
         final org.apache.sling.feature.Artifact a = new org.apache.sling.feature.Artifact(ArtifactId.parse("org.apache.sling/org.apache.sling.launchpad.api/1.2.0"));
         a.getMetadata().put(org.apache.sling.feature.Artifact.KEY_START_ORDER, "1");
         app.getBundles().add(a);
+
         // sling.properties (TODO)
         if ( propsFile == null ) {
             app.getFrameworkProperties().put("org.osgi.framework.bootdelegation", "sun.*,com.sun.*");
         } else {
 
         }
-        // felix framework hard coded for now
-        app.setFramework(IOUtils.getFelixFrameworkId(frameworkVersion));
+        // check framework
+        if ( app.getExtensions().getByName(FeatureConstants.EXTENSION_NAME_FRAMEWORK) == null ) {
+
+            // use hard coded Apache Felix
+            final Extension fwk = new Extension(ExtensionType.JSON, FeatureConstants.EXTENSION_NAME_FRAMEWORK, false);
+            fwk.getArtifacts().add(new Artifact(IOUtils.getFelixFrameworkId(frameworkVersion)));
+            app.getExtensions().add(fwk);
+        }
+
+        for (Artifact bundle : app.getBundles()) {
+            if ( bundle.getStartOrder() == 0) {
+                final int so = bundle.getMetadata().get("start-level") != null ? Integer.parseInt(bundle.getMetadata().get("start-level")) : 1;
+                bundle.setStartOrder(so);
+            }
+        }
+
         return app;
     }
 
-    private static void writeApplication(final Application app, final String out) {
+    private static void writeApplication(final Feature app, final String out) {
         LOGGER.info("Writing application: " + out);
         final File file = new File(out);
         try ( final FileWriter writer = new FileWriter(file)) {
-            ApplicationJSONWriter.write(writer, app);
+            FeatureJSONWriter.write(writer, app);
         } catch ( final IOException ioe) {
             LOGGER.error("Unable to write application to {} : {}", out, ioe.getMessage(), ioe);
             System.exit(1);
