@@ -61,8 +61,6 @@ public class Main {
 
     private static String propsFile;
 
-    private static String frameworkVersion;
-
     private static File cacheDir;
 
     /**
@@ -76,7 +74,6 @@ public class Main {
         final Option filesOption =  new Option("f", true, "Set feature files (comma separated)");
         final Option dirsOption = new Option("d", true, "Set feature file dirs (comma separated)");
         final Option propsOption =  new Option("p", true, "sling.properties file");
-        final Option frameworkOption = new Option("fv", true, "Set felix framework version");
         final Option outputOption = Option.builder("o").hasArg().argName("Set output file")
                 .desc("output file").build();
 
@@ -90,7 +87,6 @@ public class Main {
         options.addOption(dirsOption);
         options.addOption(outputOption);
         options.addOption(propsOption);
-        options.addOption(frameworkOption);
         options.addOption(cacheOption);
         options.addOption(debugOption);
 
@@ -112,9 +108,6 @@ public class Main {
             }
             if ( cl.hasOption(propsOption.getOpt()) ) {
                 propsFile = cl.getOptionValue(propsOption.getOpt());
-            }
-            if (cl.hasOption(frameworkOption.getOpt())) {
-                frameworkVersion = cl.getOptionValue(frameworkOption.getOpt());
             }
             if (cl.hasOption(cacheOption.getOpt())) {
                 cacheDir = new File(cl.getOptionValue(cacheOption.getOpt()));
