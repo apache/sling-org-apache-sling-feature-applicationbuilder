@@ -34,10 +34,7 @@ import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.sling.feature.Artifact;
 import org.apache.sling.feature.ArtifactId;
-import org.apache.sling.feature.Extension;
-import org.apache.sling.feature.ExtensionType;
 import org.apache.sling.feature.Feature;
-import org.apache.sling.feature.FeatureConstants;
 import org.apache.sling.feature.builder.BuilderContext;
 import org.apache.sling.feature.builder.FeatureBuilder;
 import org.apache.sling.feature.builder.FeatureProvider;
@@ -269,14 +266,6 @@ public class Main {
             app.getFrameworkProperties().put("org.osgi.framework.bootdelegation", "sun.*,com.sun.*");
         } else {
 
-        }
-        // check framework
-        if ( app.getExtensions().getByName(FeatureConstants.EXTENSION_NAME_FRAMEWORK) == null ) {
-
-            // use hard coded Apache Felix
-            final Extension fwk = new Extension(ExtensionType.JSON, FeatureConstants.EXTENSION_NAME_FRAMEWORK, false);
-            fwk.getArtifacts().add(new Artifact(IOUtils.getFelixFrameworkId(frameworkVersion)));
-            app.getExtensions().add(fwk);
         }
 
         for (Artifact bundle : app.getBundles()) {
