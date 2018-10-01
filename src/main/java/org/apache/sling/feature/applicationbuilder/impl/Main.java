@@ -38,11 +38,9 @@ import org.apache.sling.feature.Feature;
 import org.apache.sling.feature.builder.BuilderContext;
 import org.apache.sling.feature.builder.FeatureBuilder;
 import org.apache.sling.feature.builder.FeatureProvider;
-import org.apache.sling.feature.io.ArtifactHandler;
-import org.apache.sling.feature.io.ArtifactManager;
-import org.apache.sling.feature.io.DefaultArtifactManagerConfig;
-import org.apache.sling.feature.io.DefaultArtifactManager;
-import org.apache.sling.feature.io.IOUtils;
+import org.apache.sling.feature.io.file.ArtifactHandler;
+import org.apache.sling.feature.io.file.ArtifactManager;
+import org.apache.sling.feature.io.file.ArtifactManagerConfig;
 import org.apache.sling.feature.io.json.FeatureJSONReader;
 import org.apache.sling.feature.io.json.FeatureJSONWriter;
 import org.slf4j.Logger;
@@ -128,7 +126,7 @@ public class Main {
     }
 
     private static ArtifactManager getArtifactManager() {
-        final DefaultArtifactManagerConfig amConfig = new DefaultArtifactManagerConfig();
+        final ArtifactManagerConfig amConfig = new ArtifactManagerConfig();
         if ( repoUrls != null ) {
             amConfig.setRepositoryUrls(repoUrls.split(","));
         }
@@ -136,7 +134,7 @@ public class Main {
             amConfig.setCacheDirectory(cacheDir);
         }
         try {
-            return DefaultArtifactManager.getArtifactManager(amConfig);
+            return ArtifactManager.getArtifactManager(amConfig);
         } catch ( IOException ioe) {
             LOGGER.error("Unable to create artifact manager " + ioe.getMessage(), ioe);
             System.exit(1);
@@ -216,8 +214,11 @@ public class Main {
         {
             try
             {
-                final Feature f = IOUtils.getFeature(initFile, artifactManager);
-                features.add(f);
+                final ArtifactHandler featureArtifact = artifactManager.getArtifactHandler(initFile);
+                try (final FileReader r = new FileReader(featureArtifact.getFile())) {
+                    final Feature f = FeatureJSONReader.read(r, featureArtifact.getUrl());
+                    features.add(f);
+                }
             }
             catch (Exception ex)
             {
