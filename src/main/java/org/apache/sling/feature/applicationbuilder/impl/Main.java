@@ -40,7 +40,8 @@ import org.apache.sling.feature.builder.FeatureBuilder;
 import org.apache.sling.feature.builder.FeatureProvider;
 import org.apache.sling.feature.io.ArtifactHandler;
 import org.apache.sling.feature.io.ArtifactManager;
-import org.apache.sling.feature.io.ArtifactManagerConfig;
+import org.apache.sling.feature.io.DefaultArtifactManagerConfig;
+import org.apache.sling.feature.io.DefaultArtifactManager;
 import org.apache.sling.feature.io.IOUtils;
 import org.apache.sling.feature.io.json.FeatureJSONReader;
 import org.apache.sling.feature.io.json.FeatureJSONWriter;
@@ -127,7 +128,7 @@ public class Main {
     }
 
     private static ArtifactManager getArtifactManager() {
-        final ArtifactManagerConfig amConfig = new ArtifactManagerConfig();
+        final DefaultArtifactManagerConfig amConfig = new DefaultArtifactManagerConfig();
         if ( repoUrls != null ) {
             amConfig.setRepositoryUrls(repoUrls.split(","));
         }
@@ -135,7 +136,7 @@ public class Main {
             amConfig.setCacheDirectory(cacheDir);
         }
         try {
-            return ArtifactManager.getArtifactManager(amConfig);
+            return DefaultArtifactManager.getArtifactManager(amConfig);
         } catch ( IOException ioe) {
             LOGGER.error("Unable to create artifact manager " + ioe.getMessage(), ioe);
             System.exit(1);
